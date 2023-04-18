@@ -1,3 +1,4 @@
+import sys
 import subprocess
 import unittest
 from mock import patch, Mock
@@ -78,15 +79,40 @@ class TestPCIIds(unittest.TestCase):
         video_class = ids.lookupClass('Display controller')
         self.assertEqual(video_class, ['03'])
 
+        # Python3 Popen().stdout.__iter__ returns bytes. Mock it using mode='rb':
+        popen_mode = 'r' if sys.version_info.major == 2 else 'rb'
+
         with patch("xcp.pci.subprocess.Popen") as popen_mock, \
-             open("tests/data/lspci-mn") as fake_data:
+             open("tests/data/lspci-mn", popen_mode) as fake_data:
             popen_mock.return_value.stdout.__iter__ = Mock(return_value=iter(fake_data))
             devs = PCIDevices()
         popen_mock.assert_called_once_with(['lspci', '-mn'], bufsize = 1,
                                            stdout = subprocess.PIPE)
         sorted_devices = sorted(devs.findByClass(video_class),
                                 key=lambda x: x['id'])
-        self.assertEqual(len(sorted_devices), 2)
+        expected = [
+            {
+                "id": "03:00.0",
+                "class": "03",
+                "subclass": "80",
+                "vendor": "1002",
+                "device": "7340",
+                "subvendor": "1462",
+                "subdevice": "12ac",
+            },
+            {
+                "id": "07:00.0",
+                "class": "03",
+                "subclass": "00",
+                "vendor": "1002",
+                "device": "1636",
+                "subvendor": "1462",
+                "subdevice": "12ac",
+            },
+        ]
+        self.assertEqual(len(sorted_devices), len(expected))
+        for device in [0, 1]:
+            self.assertDictEqual(expected[device], sorted_devices[device])
 
         for (video_dev,
              num_functions,

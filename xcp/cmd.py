@@ -41,9 +41,11 @@ def runCmd(command, with_stdout = False, with_stderr = False, inputtext = None):
     l = "ran %s; rc %d" % (str(command), rv)
     if inputtext:
         l += " with input %s" % inputtext
-    if out != "":
+    if out:
+        out = out.decode()
         l += "\nSTANDARD OUT:\n" + out
-    if err != "":
+    if err:
+        err = err.decode()
         l += "\nSTANDARD ERROR:\n" + err
 
     for line in l.split('\n'):

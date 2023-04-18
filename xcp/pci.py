@@ -259,7 +259,7 @@ class PCIDevices(object):
                                stdout = subprocess.PIPE)
         for l in cmd.stdout:
             line = l.rstrip()
-            el = [x for x in line.replace('"', '').split() if not x.startswith('-')]
+            el = [x for x in line.decode().replace('"', '').split() if not x.startswith('-')]
             self.devs[el[0]] = {'id': el[0],
                                 'class': el[1][:2],
                                 'subclass': el[1][2:],

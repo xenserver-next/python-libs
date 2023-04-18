@@ -1,3 +1,4 @@
+import sys
 import unittest
 from mock import patch, Mock
 
@@ -27,9 +28,11 @@ class TestQuirks(unittest.TestCase):
 class TestDeviceNames(unittest.TestCase):
     def test(self):
         with patch("xcp.net.biosdevname.Popen") as popen_mock:
-            with open("tests/data/physical.biosdevname") as f:
+            # Python3 Popen().stdout.__iter__ returns bytes. Mock it using mode='rb':
+            popen_mode = 'r' if sys.version_info.major == 2 else 'rb'
+            with open("tests/data/physical.biosdevname", popen_mode) as f:
                 fake_output_1 = f.read()
-            with open("tests/data/all_ethN.biosdevname") as f:
+            with open("tests/data/all_ethN.biosdevname", popen_mode) as f:
                 fake_output_2 = f.read()
             communicate_mock = Mock(side_effect=iter([(fake_output_1, ""),
                                                       (fake_output_2, "")]))
