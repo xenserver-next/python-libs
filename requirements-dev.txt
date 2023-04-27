@@ -1,13 +1,14 @@
 # necessary dev/test tasks
 pylint
-coverage
-diff_cover
+coverage[toml]
 mock
 pytest
 pytest-cov
 parameterized
 # dependencies also in setup.py until they can be used
 six
+typing_extensions
 
 # python-2.7 only
 configparser ; python_version < "3.0"
+pyliblzma ; python_version < "3.0"
