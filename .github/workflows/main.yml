@@ -11,20 +11,21 @@ name: Unit tests
 on: [push, pull_request]
 env:
   PYTHONWARNINGS: "ignore"
-  PIP_ROOT_USER_ACTION: "ignore"  # For local testing using act-cli (see notes above)
+  PIP_ROOT_USER_ACTION: "ignore"   # For local testing using act-cli
+  PIP_NO_WARN_SCRIPT_LOCATION: "0" # For local testing using act-cli
 
 jobs:
   test:
     strategy:
-      max-parallel: 1
+      max-parallel: 1  # See: https://github.com/xenserver/python-libs/pull/26#discussion_r1179482169
       matrix:
         include:
         - python-version: '3.11'
           os: ubuntu-latest
-        - python-version: '2.7'
-          os: ubuntu-20.04
         - python-version: '3.10'
           os: ubuntu-latest
+        - python-version: '2.7'
+          os: ubuntu-20.04
         - python-version: '3.9'
           os: ubuntu-latest
         - python-version: '3.8'
@@ -43,62 +44,36 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install development dependencies and the package itself
+      - name: Provide Pylint Summary and Report on the GitHub Action's info page
+        if: ${{ matrix.python-version == '3.10' }}
         run: |
-          python -m pip install --quiet --upgrade pip
-          pip install --quiet -r requirements-dev.txt .
+          pip install -q pylint pandas tabulate 2>&1|grep -v root ||: # Hide warning for root in local container
+          tree=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_REF_NAME
+          [ -n "$GITHUB_STEP_SUMMARY" ] || GITHUB_STEP_SUMMARY=pylint-summary-table.md
+          ./gen_gh_pylint_report.py xcp $GITHUB_STEP_SUMMARY $tree
 
-      - name: Post a pylint Report on the Action's summary page
-        if: ${{ matrix.python-version == '3.9' }}
+      - name: "tox for ${{ matrix.python-version }} (and also mypy if 3.11)"
         run: |
-          pip install --quiet pandas tabulate
-          tool=github-action-pylint-report.py
-          repo=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY
-          tree=$repo/tree/$GITHUB_REF_NAME
-          ./github-action-pylint-report.py xcp pylint-report.md $tree
-          message_count=`tail -1 pylint-report.md|cut -d'|' -f2`
-          if [ -e $GITHUB_STEP_SUMMARY ]; then  #  The "act" local runner does not have this:
-              echo -n "### [$tool]($tree/$tool) on **xcp/\\*\\*/*.py**" >>$GITHUB_STEP_SUMMARY
-              echo ": #Total Pylint messages: $message_count :rocket: " >>$GITHUB_STEP_SUMMARY
-              cat pylint-report.md                                      >>$GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Run pytest and generate raw coverage data
-        id: coverage
-        if: ${{ matrix.python-version == '3.11' }}
-        run: |
-          PYTHONPATH=$PWD pytest --cov
-          coverage xml
-          coverage html -d htmlcov-${{ matrix.python-version }}
-          coverage html -d htmlcov-tests-${{ matrix.python-version }} --include="tests/*"
-          diff-cover --compare-branch=origin/master --html-report coverage-diff-${{ matrix.python-version }}.html coverage.xml
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "Run tox for ${{ matrix.python-version }} (and also mypy if 3.11)"
-        if: ${{ matrix.python-version != '2.7' }}  # On Ubuntu 20.04 Python2.7, tox is older
-        run: |
-          set -ex;pip install --quiet --user --upgrade tox tox-gh-actions
-          ~/.local/bin/tox  # Runs pytest & mypy in defined environments, simple to run locally
-
-      - name: Pylint
-        run: |
-          pylint --version
-          pylint --exit-zero xcp/ tests/ setup.py
-          pylint --exit-zero --msg-template="{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}" xcp/ tests/ setup.py > pylint.txt
-          diff-quality --compare-branch=origin/master --violations=pylint --html-report pylint-diff-${{ matrix.python-version }}.html pylint.txt
+          rm -f coverage.xml
+          pip -q install tox tox-gh-actions
+          tox --recreate
 
       - name: Upload coverage reports to Codecov
+        if: ${{ matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@v3
-        if: github.event_name == 'pull_request' && steps.coverage.outcome == 'success'
 
       - uses: actions/upload-artifact@v3
-        if: ${{ !env.ACT }}  # skip during local actions testing using act-cli
+        # Skip coverage upload during local actions testing using act-cli:
+        # For logging the contents of the context, see:
+        # https://docs.github.com/en/actions/learn-github-actions/contexts#example-printing-context-information-to-the-log
+        if: ${{ !startsWith(github.actor, 'nektos/act') }}
         with:
-          name: Coverage and pylint reports
+          name: Zip and upload Coverage and Pylint reports
           path: |
-            coverage-diff-${{ matrix.python-version }}.html
-            pylint-diff-${{ matrix.python-version }}.html
-            htmlcov-${{ matrix.python-version }}
-            htmlcov-tests-${{ matrix.python-version }}
+            coverage.xml
+             .tox/py311-cov/log/htmlcov/
+             .tox/py311-cov/log/htmlcov-tests/
+             .tox/py311-cov/log/coverage-diff.html
+             .tox/py311-cov/log/pylint-diff.html
+             .tox/py311-cov/log/pylint.txt
+             .tox/py311-cov/log/.coverage
