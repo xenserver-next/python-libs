@@ -27,14 +27,24 @@
 
 import ftplib
 import os
+import socket
+import sys
 import tempfile
 import errno
-from abc import abstractmethod
 
 from six.moves import urllib  # pyright: ignore
 
 import xcp.mount as mount
 import xcp.logger as logger
+
+if sys.version_info.major >= 3:
+    from io import BufferedReader  # pylint: disable=unused-import # pragma: no cover
+    from typing import BinaryIO, Dict, List, Union  # pylint: disable=unused-import # pragma: no cover
+    from typing_extensions import Literal  # pylint: disable=unused-import # pragma: no cover
+    from http.client import HTTPResponse  # pragma: no cover
+
+    AccessorOpenModes = Literal["r", "w", "rw", "rb", "wb", "rwb"]  # pragma: no cover
+    OpenAddressReturns = Union[BinaryIO, BufferedReader, HTTPResponse, Literal[False]]  # pragma: no cover
 
 # maps errno codes to HTTP error codes
 # needed for error code consistency
@@ -62,14 +72,15 @@ class Accessor(object):
             if not f:
                 return False
             f.close()
-        except Exception as e:
+        except Exception:  # pragma: no cover
             return False
 
         return True
 
-    @abstractmethod
-    def openAddress(self, address, mode="", **kwargs):
-        """must be overloaded, accept mode and kwargs and return a file handle"""
+    def openAddress(self, address, mode="rb", **kwargs):  # pragma: no cover
+        # type: (str, AccessorOpenModes, List[Dict[str, str]]) -> OpenAddressReturns
+        """Must be overloaded, accept mode and kwargs, return a file handle or False"""
+        return open(address, "rb")  # To make static type checkers happy
 
     def canEject(self):
         return False
@@ -89,6 +100,7 @@ class Accessor(object):
             out_fh.write(data)
         out_fh.close()
         return True
+
 
 class FilesystemAccessor(Accessor):
     def __init__(self, location, ro):
@@ -117,6 +129,18 @@ class FilesystemAccessor(Accessor):
             self.lastError = 500
             return False
         return filehandle
+
+    def writeFile(self, in_fh, out_name, mode="wb", **kwargs):
+        logger.info("Copying to %s" % os.path.join(self.location, out_name))
+        # To be safe against mis-use like `writeFile(file, mode="w")` for text mode
+        # (note: the mode parameter is new), enforce "wb" unless encoding was given:
+        mode = mode if "encoding" in kwargs else "wb"
+        # pylint: disable-next=unspecified-encoding,consider-using-with
+        out_fh = open(os.path.join(self.location, out_name), mode, **kwargs)
+        return self._writeFile(in_fh, out_fh)
+
+    def __repr__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.location)
 
 class MountingAccessor(FilesystemAccessor):
     def __init__(self, mount_types, mount_source, mount_options=None):
@@ -164,15 +188,6 @@ class MountingAccessor(FilesystemAccessor):
             os.rmdir(self.location)
             self.location = None
 
-    def writeFile(self, in_fh, out_name, mode="wb", **kwargs):
-        logger.info("Copying to %s" % os.path.join(self.location, out_name))
-        # To be safe against mis-use like `writeFile(file, mode="w")` for text mode
-        # (note: the mode parameter is new), enforce "wb" unless encoding was given:
-        mode = mode if "encoding" in kwargs else "wb"
-        # pylint: disable-next=unspecified-encoding,consider-using-with
-        out_fh = open(os.path.join(self.location, out_name), mode, **kwargs)
-        return self._writeFile(in_fh, out_fh)
-
     def __del__(self):
         while self.start_count > 0:
             self.finish()
@@ -215,48 +230,13 @@ class NFSAccessor(MountingAccessor):
     def __repr__(self):
         return "<NFSAccessor: %s>" % self.nfspath
 
-class FileAccessor(Accessor):
+class FileAccessor(FilesystemAccessor):
+    """Subclass of FilesystemAccessor. It strips file:// and requires a trailing /"""
     def __init__(self, baseAddress, ro):
         if baseAddress.startswith('file://'):
             baseAddress = baseAddress[7:]
         assert baseAddress.endswith('/')
-        super(FileAccessor, self).__init__(ro)
-        self.baseAddress = baseAddress
-
-    def openAddress(self, address, mode="rb", **kwargs):
-        # To be safe against mis-use like `openAccess(file, mode="r")` for text mode
-        # (note: the mode parameter is new), enforce "rb" unless encoding was given:
-        mode = mode if "encoding" in kwargs else "rb"
-        try:  # pylint: disable-next=unspecified-encoding,consider-using-with
-            file = open(os.path.join(self.baseAddress, address), mode, **kwargs)
-        except IOError as e:
-            if e.errno == errno.EIO:
-                self.lastError = 5
-            else:
-                self.lastError = mapError(e.errno)
-            return False
-        except OSError as e:
-            if e.errno == errno.EIO:
-                self.lastError = 5
-            else:
-                self.lastError = mapError(e.errno)
-            return False
-        except Exception as e:
-            self.lastError = 500
-            return False
-        return file
-
-    def writeFile(self, in_fh, out_name, mode="wb", **kwargs):
-        # To be safe against mis-use like `writeFile(file, mode="w")` for text mode
-        # (note: the mode parameter is new), enforce "wb" unless encoding was given:
-        mode = mode if "encoding" in kwargs else "wb"
-        logger.info("Copying to %s" % os.path.join(self.baseAddress, out_name))
-        # pylint: disable-next=unspecified-encoding,consider-using-with
-        out_fh = open(os.path.join(self.baseAddress, out_name), mode, **kwargs)
-        return self._writeFile(in_fh, out_fh)
-
-    def __repr__(self):
-        return "<FileAccessor: %s>" % self.baseAddress
+        super(FileAccessor, self).__init__(baseAddress, ro)
 
 def rebuild_url(url_parts):
     '''Rebuild URL without auth components'''
@@ -380,8 +360,8 @@ class HTTPAccessor(Accessor):
 
         self.baseAddress = rebuild_url(self.url_parts)
 
-    def openAddress(self, address, mode="", **kwargs):
-        """Open an HTTP/S URL. Note urllib must return binary as encoding may be gzip"""
+    def openAddress(self, address, mode="rb", **kwargs):
+        """Open an HTTP/S URL. Note: urlopen must return binary: encoding may be gzip"""
         try:
             # pylint: disable-next=consider-using-with
             urlFile = urllib.request.urlopen(os.path.join(self.baseAddress, address))
