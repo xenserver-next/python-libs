@@ -49,7 +49,7 @@ def run_pytype(command: list, branch_url: str, errorlog: TextIO, results):
                 if line:
                     if line.startswith("For more details, see"):
                         row["Error code"] = f"[{row['Error code']}]({line[22:]})"
-                        error += " <br><p> " + line[22:]
+                        error += " " + line[22:]
                     else:
                         if not row["Error description"]:
                             row["Error description"] = line.lstrip()
@@ -75,10 +75,10 @@ def run_pytype(command: list, branch_url: str, errorlog: TextIO, results):
             msg_splitpos = msg.find(" ", 21)
             file = match.group(1)
             linktext = os.path.basename(file).split(".")[0]
-            link = f"[{linktext}]({branch_url}/{file}#L{lineno})"
+            source_link = f"[`{linktext}`]({branch_url}/{file}#L{lineno})"
             row = {
-                "Location": link,
-                "Function": func,
+                "Location": source_link,
+                "Function": f"`{func}`",
                 "Error code": code,
                 "Error message": msg[:msg_splitpos] + "<br>" + msg[msg_splitpos + 1 :],
                 "Error description": "",
@@ -91,9 +91,9 @@ def run_pytype(command: list, branch_url: str, errorlog: TextIO, results):
 
 
 def to_markdown(me, fp, results, branch_url):
-    mylink = f"[{me}]({branch_url}/{me}.py)"
-    pytype_link = "[pytype](https://google.github.io/pytype)"
-    fp.write(f"\n### TODO/FIXME: Selected {pytype_link} errors by {mylink}\n")
+    mylink = f"[`{me}`]({branch_url}/{me}.py)"
+    pytype_link = "[`pytype`](https://google.github.io/pytype)"
+    fp.write(f"\n### TODO/FIXME: Selected {pytype_link} errors by {mylink}:\n")
     fp.write(pd.DataFrame(results).to_markdown())
     fp.write("\n")
 

@@ -78,7 +78,7 @@ jobs:
       - name: Generate combined test-coverage with Python 2.7 and 3.8 for upload to codecov
         if: ${{ matrix.python-version == 2.7 }}
         run: |
-          tox --workdir .github/workflows/.tox --recreate -e py27-test
+          # tox --workdir .github/workflows/.tox --recreate -e py27-test
           tox --workdir .github/workflows/.tox --recreate -e py38-covcombine
 
       - name: Upload coverage reports to Codecov

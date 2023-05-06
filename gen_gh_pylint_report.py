@@ -115,10 +115,10 @@ def pylint_project(module_path: str, branch_url: str, errorlog: TextIOWrapper):
 
         pylint_overview.append(
             {
-                "filepath": f"[{filepath[4:]}]({branch_url}/{filepath})",
+                "filepath": f"[`{filepath[4:]}`]({branch_url}/{filepath})",
                 "smells": smells,
                 "symbols": " ".join(filtered_messages.keys()),
-                "score": round(score, 3),
+                "score": float(round(score, 1))  # There are some ints among the floats
             }
         )
     avg_score = score_sum / len(pylint_overview)
@@ -127,7 +127,7 @@ def pylint_project(module_path: str, branch_url: str, errorlog: TextIOWrapper):
             "filepath": "total",
             "smells": smell_sum,
             "symbols": "",
-            "score": round(avg_score, 3),
+            "score": round(avg_score, 1),
         }
     )
     return pd.DataFrame(pylint_overview), pd.DataFrame(pylint_results)  # , avg_score
