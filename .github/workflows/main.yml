@@ -51,35 +51,28 @@ jobs:
         if: ${{ matrix.python-version == 3.11 }}
         run: |
           pip install -q pylint pandas tabulate 2>&1|grep -v root ||: # Hide warning for root in local container
-          tree=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_REF_NAME
-          [ -n "$GITHUB_STEP_SUMMARY" ] || GITHUB_STEP_SUMMARY=pylint-summary-table.md
-          ./gen_gh_pylint_report.py xcp $GITHUB_STEP_SUMMARY $tree
+          ./gen_gh_pylint_report.py xcp
 
       - name: Install of tox4 on ubuntu-latest
         if: ${{ startsWith(matrix.python-version, '3.') && matrix.python-version != 3.6 }}
-        run: |
-          pip install -q 'virtualenv<20.22' 'tox>=4.5.1' tox-gh-actions
+        run: pip install -q 'virtualenv<20.22' 'tox>=4.5.1' tox-gh-actions
 
       # tox >= 4.0.0 is needed for using optional-dependencies from pyproject.toml, which is
       # is not available for python <= 3.6, so use the python3.8 of Ubuntu-20.04 to install it:
       - name: Install of tox4 on 20.04 for using optional-dependencies from pyproject.toml
         if: ${{ matrix.python-version == 2.7 || matrix.python-version == 3.6 }}
         run: |
-          # Need python3-tox4 for pyproject.toml/optional-dependencies/test deps:
           set -xv;curl -sSL https://bootstrap.pypa.io/get-pip.py -o get-pip.py
           python3.8 get-pip.py
           python3.8 -m pip install -q 'virtualenv<20.22' 'tox>=4.5.1' tox-gh-actions
 
-      - name: Run tests with Python ${{ matrix.python-version }} >= 3.6
+      - name: Run tests with Python3 (current python matrix is ${{ matrix.python-version }})
         if: ${{ matrix.python-version != 2.7 }}
-        run: |
-          tox --workdir .github/workflows/.tox --recreate
+        run: tox --workdir .github/workflows/.tox --recreate
 
       - name: Generate combined test-coverage with Python 2.7 and 3.8 for upload to codecov
         if: ${{ matrix.python-version == 2.7 }}
-        run: |
-          # tox --workdir .github/workflows/.tox --recreate -e py27-test
-          tox --workdir .github/workflows/.tox --recreate -e py38-covcombine
+        run: tox --workdir .github/workflows/.tox --recreate -e py38-covcombine
 
       - name: Upload coverage reports to Codecov
         if: ${{ matrix.python-version == 2.7 }}

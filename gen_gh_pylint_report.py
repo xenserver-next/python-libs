@@ -160,14 +160,23 @@ def main(module_dir: str, output_file: str, branch_url: str, errorlog_file: str)
 
 
 if __name__ == "__main__":
-    default_branch_url = "https://github.com/xenserver/python-libs/blob/master"
-    default_error_file = "/dev/stderr"
+    ghblob_url = "https://github.com/xenserver/python-libs/blob/master"
+    action_log = "/dev/stderr"
+    server_url = os.environ.get("GITHUB_SERVER_URL", None)
+    repository = os.environ.get("GITHUB_REPOSITORY", None)
+    if server_url and repository:
+        # https://github.com/orgs/community/discussions/5251 only set on Pull requests:
+        branch = os.environ.get("GITHUB_HEAD_REF", None)
+        if not branch:
+            # Always set but set to num/merge on PR, but to branch on pushes:
+            branch = os.environ.get("GITHUB_REF_NAME", None)
+        ghblob_url = f"{server_url}/{repository}/blob/{branch}"
 
     py_module_dir = sys.argv[1] if len(sys.argv) > 1 else "xcp"
     # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary
-    gh_output_file = sys.argv[2] if len(sys.argv) > 2 else "pylint-summary-table.md"
-    gh_branch_url = sys.argv[3] if len(sys.argv) > 3 else default_branch_url
-    errorlog_path = sys.argv[4] if len(sys.argv) > 4 else default_error_file
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY", "pylint-summary-table.md")
+    if len(sys.argv) > 2:
+        step_summary = sys.argv[2]
 
-    print(py_module_dir, gh_output_file, gh_branch_url, errorlog_path)
-    main(py_module_dir, gh_output_file, gh_branch_url, errorlog_path)
+    print(py_module_dir, step_summary, ghblob_url)
+    main(py_module_dir, step_summary, ghblob_url, action_log)

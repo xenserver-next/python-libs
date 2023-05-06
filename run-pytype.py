@@ -156,7 +156,11 @@ if __name__ == "__main__":
     filelink_baseurl = "https://github.com/xenserver/python-libs/blob/master"
     server_url = os.environ.get("GITHUB_SERVER_URL", None)
     repository = os.environ.get("GITHUB_REPOSITORY", None)
-    ref_name = os.environ.get("GITHUB_REF_NAME", None)
-    if server_url and repository and ref_name:
-        filelink_baseurl = f"{server_url}/{repository}/tree/{ref_name}"
+    if server_url and repository:
+        # https://github.com/orgs/community/discussions/5251 only set on Pull requests:
+        branch = os.environ.get("GITHUB_HEAD_REF", None)
+        if not branch:
+            # Always set but set to num/merge on PR, but to branch on pushes:
+            branch = os.environ.get("GITHUB_REF_NAME", None)
+        filelink_baseurl = f"{server_url}/{repository}/blob/{branch}"
     main(scriptname, filelink_baseurl)
