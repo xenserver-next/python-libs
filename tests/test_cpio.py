@@ -7,6 +7,7 @@ import subprocess
 import unittest
 import warnings
 
+import xcp.cpiofile
 from xcp.cpiofile import CpioFile, CpioFileCompat, CPIO_PLAIN, CPIO_GZIPPED
 
 def writeRandomFile(fn, size, start=b'', add=b'a'):
@@ -65,6 +66,11 @@ class TestCpio(unittest.TestCase):
     # TODO check with file (like 'r:*')
     # TODO use cat to check properly for pipes
     def archiveExtract(self, fn, fmt='r|*'):
+
+        # Test assertTrue and assertFalse of xcp.cpiofile.is_cpiofile():
+        self.assertTrue(xcp.cpiofile.is_cpiofile(fn))  # Expect True (is a cpio file)
+        self.assertFalse(xcp.cpiofile.is_cpiofile(sys.executable))  # Expect False
+
         arc = CpioFile.open(fn, fmt)
         found = False
         for f in arc:
