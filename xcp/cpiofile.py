@@ -1159,12 +1159,21 @@ class CpioFile(six.Iterator):
 
         if fileobj is not None:
             fileobj = _XZProxy(fileobj, mode)
-        else:
-            # FIXME: not compatible with python3 API
+        elif sys.version_info.major == 2:  # pylint: disable-next=unexpected-keyword-arg
             fileobj = lzma.LZMAFile(name, mode, options={'level': compresslevel, 'dict_size': 20 })
 
+            lzma_error_exception = lzma.error  # type: ignore # pylint: disable=no-member
+        else:
+            lzma_error_exception = lzma.LZMAError
+            fileobj = (
+                lzma.LZMAFile(name, mode, preset=compresslevel)
+                if "w" in mode
+                else lzma.LZMAFile(name, mode)
+            )
         try:
             t = cls.cpioopen(name, mode, fileobj)
+        except lzma_error_exception as e:
+            six.raise_from(CompressionError("lzma: " + str(e)), e)
         except IOError:
             raise ReadError("not a XZ file")
         t._extfileobj = False
@@ -1175,7 +1184,7 @@ class CpioFile(six.Iterator):
         "cpio": "cpioopen",   # uncompressed cpio
         "gz":  "gzopen",    # gzip compressed cpio
         "bz2": "bz2open",   # bzip2 compressed cpio
-        "xz":  "xzopen "    # xz compressed cpio
+        "xz":  "xzopen"  # xz compressed cpio
     }
 
     #--------------------------------------------------------------------------
