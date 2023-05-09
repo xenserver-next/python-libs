@@ -63,7 +63,7 @@ if sys.platform == 'mac':
 
 try:
     import grp as GRP, pwd as PWD
-except ImportError:
+except ImportError:   # pragma: no cover
     GRP = PWD = None  # type: ignore[assignment] # pragma: no cover
 
 # from cpiofile import *
