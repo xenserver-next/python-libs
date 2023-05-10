@@ -59,11 +59,11 @@ if sys.platform == 'mac':
     # handling. In many places it is assumed a simple substitution of / by the
     # local os.path.sep is good enough to convert pathnames, but this does not
     # work with the mac rooted:path:name versus :nonrooted:path:name syntax
-    raise ImportError("cpiofile does not work for platform==mac")
+    raise ImportError("cpiofile does not work for platform==mac")  # pragma: no cover
 
 try:
     import grp as GRP, pwd as PWD
-except ImportError:
+except ImportError:  # pragma: no cover
     GRP = PWD = None  # type: ignore[assignment] # pragma: no cover
 
 # from cpiofile import *

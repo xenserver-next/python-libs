@@ -27,7 +27,7 @@ def writeRandomFile(fn, size, start=b'', add=b'a'):
 def check_call(cmd):
     r = subprocess.call(cmd, shell=True)
     if r != 0:
-        raise Exception('error executing command')
+        raise subprocess.CalledProcessError(r, cmd)  # pragma: no cover
 
 class TestCpio(unittest.TestCase):
     def setUp(self):
@@ -46,15 +46,16 @@ class TestCpio(unittest.TestCase):
 
         try:
             check_call("find archive | cpio --reproducible -o -H newc > archive.cpio")
-        except:
-            raise unittest.SkipTest("cpio tool not available")
+        except subprocess.CalledProcessError as exc:  # pragma: no cover
+            import six  # pylint: disable=import-outside-toplevel (avoid merge conflict)
+            six.raise_from(unittest.SkipTest("cpio tool not available"), exc)
         check_call("gzip -c < archive.cpio > archive.cpio.gz")
         check_call("bzip2 -c < archive.cpio > archive.cpio.bz2")
         try:
-            import lzma         # pylint: disable=unused-variable
+            import lzma  # pylint: disable=import-outside-toplevel, unused-import
             self.doXZ = subprocess.call("xz --check=crc32 --lzma2=dict=1MiB"
                                         " < archive.cpio > archive.cpio.xz", shell=True) == 0
-        except Exception as ex:
+        except Exception as ex:  # pragma: no cover
             # FIXME will issue warning even if test_xz is not requested
             warnings.warn("will not test cpio.xz: %s" % ex)
             self.doXZ = False
@@ -69,7 +70,9 @@ class TestCpio(unittest.TestCase):
         found = False
         for f in arc:
             if f.isfile():
-                data = arc.extractfile(f).read()
+                fileobject = arc.extractfile(f)
+                assert fileobject  # to calm static analysis tools: pytype and pyright
+                data = fileobject.read()
                 self.assertEqual(len(data), f.size)
                 self.assertEqual(self.md5data, md5(data).hexdigest())
                 found = True
@@ -83,9 +86,9 @@ class TestCpio(unittest.TestCase):
         check_call("diff -rq archive2 archive")
         arc.close()
 
-    def archiveCreate(self, fn, fmt='w'):
+    def archiveCreate(self, fn, fmt='w'):  # sourcery skip: assign-if-exp
         if os.path.exists(fn):
-            os.unlink(fn)
+            os.unlink(fn)  # pragma: no cover
         arc = CpioFile.open(fn, fmt)
         f = arc.getcpioinfo('archive/data')
         with open('archive/data', 'rb') as fd:
@@ -128,7 +131,7 @@ class TestCpio(unittest.TestCase):
 
     def test_xz(self):
         if not self.doXZ:
-            raise unittest.SkipTest("lzma package or xz tool not available")
+            raise unittest.SkipTest("lzma package or xz tool not available")  # pragma: no cover
         print('Running test for XZ')
         self.doArchive('archive.cpio.xz', 'xz')
 
@@ -150,7 +153,7 @@ class TestCpio(unittest.TestCase):
 
     def archiveCreateCompat(self, fn, comp):
         if os.path.exists(fn):
-            os.unlink(fn)
+            os.unlink(fn)  # pragma: no cover
         arc = CpioFileCompat(fn, mode="w", compression={"": CPIO_PLAIN,
                                                         "gz": CPIO_GZIPPED}[comp])
         arc.write('archive/data')
