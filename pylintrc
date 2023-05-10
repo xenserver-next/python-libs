@@ -55,6 +55,7 @@ disable=W0142,W0703,C0111,R0201,W0603,W0613,W0212,W0141,
     useless-object-inheritance, # "object" is not obsolete for supporting Python2
     consider-using-f-string,    # Python3-only feature, need to migrate everything first
     consider-using-with,        # Only for new code, move to Python3 is more important
+    import-outside-toplevel,    # used in cpiofile.py and dynamic.py, and not a big problem
     logging-not-lazy            # Debug-Logging is not used in "hot" code paths here
 
 
