@@ -567,27 +567,6 @@ class _BZ2Proxy(_CMPProxy):
 
 # class _BZ2Proxy
 
-class _XZProxy(_CMPProxy):
-    """Small proxy class that enables external file object
-       support for "r:xz" and "w:xz" modes.
-    """
-
-    def __init__(self, fileobj, mode):
-        _CMPProxy.__init__(self, fileobj, mode)
-        self.init()
-
-    def init(self):
-        import lzma
-        self.pos = 0
-        if self.mode == "r":
-            self.cmpobj = lzma.BZ2Decompressor()
-            self.fileobj.seek(0)
-            self.buf = b""
-        else:
-            self.cmpobj = lzma.BZ2Compressor()
-
-# class _XZProxy
-
 
 #------------------------
 # Extraction file object
@@ -1158,8 +1137,8 @@ class CpioFile(six.Iterator):
             raise CompressionError("lzma module is not available")
 
         if fileobj is not None:
-            fileobj = _XZProxy(fileobj, mode)
-        elif sys.version_info.major == 2:  # pylint: disable-next=unexpected-keyword-arg
+            raise CompressionError("passing fileobj not implemented for LZMA")
+        if sys.version_info.major == 2:  # pylint: disable-next=unexpected-keyword-arg
             fileobj = lzma.LZMAFile(name, mode, options={'level': compresslevel, 'dict_size': 20 })
 
             lzma_error_exception = lzma.error  # type: ignore # pylint: disable=no-member
