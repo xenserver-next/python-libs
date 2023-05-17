@@ -5,9 +5,25 @@ Pytest auto configuration.
 This module is run automatically by pytest to define and enable fixtures.
 """
 
+# pyre does not find the pytest module when run by tox -e py311-pyre
 # pyre-ignore-all-errors[21]
-import pytest  # pyre does not find the module when run by tox -e py311-pyre
+import subprocess
 import warnings
+
+import pytest
+
+# subprocess.Popen() can only be wrapped for all test cases, not individually:
+class PopenWrapper(subprocess.Popen):
+    """Global wrapper of subprocess.Popen() for pytest tests in this directory"""
+    def __init__(self, *args, **kwargs):
+        """Wrap Popen, replacing /sbin/biosdevname with tests/data/biosdevname"""
+        # Redirect for tests/test_biosdevname.py: /sbin/biosdevname -> tests/data/biosdevname:
+        if args[0][0] == "/sbin/biosdevname":
+            args[0][0] = "tests/data/biosdevname"
+        super(subprocess.Popen, self).__init__(*args, **kwargs)
+
+subprocess.Popen = PopenWrapper  # type: ignore[misc]
+"""Wraps subprocess.Popen for test cases which would like to redirect Popen commands"""
 
 @pytest.fixture(autouse=True)
 def set_warnings():

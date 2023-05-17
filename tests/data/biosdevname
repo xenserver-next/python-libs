@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# Simulate these calls for tests.test_biosdevname.py:
+# /sbin/biosdevname --policy all_ethN -d
+# /sbin/biosdevname --policy physical -d
+
+if [ "$1" != "--policy" -o $3 != "-d" ]; then
+    echo "Error: Arguments not supported: $0: $*" >&2
+    exit 4
+fi
+if [ "$2" = "physical" ]; then
+    exec cat tests/data/physical.biosdevname
+fi
+if [ "$2" = "all_ethN" ]; then
+    exec cat tests/data/all_ethN.biosdevname
+fi
+echo "2nd argument $2 not supported"
+exit 3
