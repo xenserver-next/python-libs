@@ -24,27 +24,40 @@
 """Command processing"""
 
 import subprocess
+import sys
+from typing import Any  # pylint: disable=unused-import
 
 from xcp import logger
 from xcp.compat import open_defaults_for_utf8_text
 
 
-def runCmd(command, with_stdout = False, with_stderr = False, inputtext = None):
-    cmd = subprocess.Popen(command, bufsize=1,
+def runCmd(command, with_stdout=False, with_stderr=False, inputtext=None, **kwargs):
+    # sourcery skip: assign-if-exp, hoist-repeated-if-condition, reintroduce-else
+
+    if inputtext is not None:
+        kwargs["mode"] = "t" if isinstance(inputtext, str) else "b"
+        if with_stdout or with_stderr:
+            open_defaults_for_utf8_text(None, kwargs)
+            kwargs.pop("mode")
+
+    # bufsize=1 means buffered in 2.7, but means line buffered in 3 (not valid in binary mode):
+    # For Python >= 3.0, select the default values (which means buffered since Python 3.3.1)
+    # pylint: disable-next=unexpected-keyword-arg
+    cmd = subprocess.Popen(command, bufsize=(1 if sys.version_info < (3, 0) else -1),
                            stdin=(inputtext and subprocess.PIPE or None),
                            stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE,
-                           shell=isinstance(command, str))
-
+                           shell=isinstance(command, str),
+                           **kwargs)
     (out, err) = cmd.communicate(inputtext)
     rv = cmd.returncode
 
     l = "ran %s; rc %d" % (str(command), rv)
-    if inputtext:
+    if inputtext and isinstance(inputtext, str):
         l += " with input %s" % inputtext
-    if out != "":
+    if out != "" and isinstance(out, str):
         l += "\nSTANDARD OUT:\n" + out
-    if err != "":
+    if err != "" and isinstance(err, str):
         l += "\nSTANDARD ERROR:\n" + err
 
     for line in l.split('\n'):
@@ -52,9 +65,9 @@ def runCmd(command, with_stdout = False, with_stderr = False, inputtext = None):
 
     if with_stdout and with_stderr:
         return rv, out, err
-    elif with_stdout:
+    if with_stdout:
         return rv, out
-    elif with_stderr:
+    if with_stderr:
         return rv, err
     return rv
 
@@ -72,14 +85,15 @@ class OutputCache(object):
                 self.cache[key] = f.read() if "b" in mode else "".join(f.readlines())
         return self.cache[key]
 
-    def runCmd(self, command, with_stdout = False, with_stderr = False, inputtext = None):
-        key = str(command) + str(inputtext)
+    def runCmd(self, command, with_stdout=False, with_stderr=False, inputtext=None, **kwargs):
+        key = str(command) + str(kwargs.get("mode")) + str(inputtext)
         rckey = 'cmd.rc:' + key
         outkey = 'cmd.out:' + key
         errkey = 'cmd.err:' + key
         if rckey not in self.cache:
-            (self.cache[rckey], self.cache[outkey], self.cache[errkey]) = \
-                                runCmd(command, True, True, inputtext)
+            self.cache[rckey], self.cache[outkey], self.cache[errkey] = runCmd(  # pyright: ignore
+                command, True, True, inputtext, **kwargs
+            )
         if with_stdout and with_stderr:
             return self.cache[rckey], self.cache[outkey], self.cache[errkey]
         elif with_stdout:
