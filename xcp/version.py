@@ -60,7 +60,7 @@ class Version(object):
         return '.'.join(map(str, self.ver))
 
     def build_as_string(self):
-        return self.build if self.build else ''
+        return self.build or ''
 
     def __str__(self):
         build = self.build_as_string()

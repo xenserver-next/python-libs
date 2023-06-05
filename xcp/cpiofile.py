@@ -55,13 +55,15 @@ import time
 import struct
 import copy
 import io
-from typing import IO, TYPE_CHECKING, Any, cast
+from typing import IO, TYPE_CHECKING, Any, Optional, cast
 
 import six
 
 if TYPE_CHECKING:
-    from bz2 import _ReadBinaryMode, _WriteBinaryMode
+    from typing_extensions import Literal
     from gzip import GzipFile
+    _ReadBinaryMode = Literal["", "r", "rb"]
+    _WriteBinaryMode = Literal["w", "wb", "x", "xb", "a", "ab"]
 
 if sys.platform == 'mac':
     # This module needs work for MacOS9, especially in the area of pathname
@@ -70,10 +72,7 @@ if sys.platform == 'mac':
     # work with the mac rooted:path:name versus :nonrooted:path:name syntax
     raise ImportError("cpiofile does not work for platform==mac")
 
-try:
-    import grp as GRP, pwd as PWD
-except ImportError:
-    GRP = PWD = None  # type: ignore[assignment] # pragma: no cover
+import grp as GRP, pwd as PWD
 
 # pylint: skip-file
 # from cpiofile import *
@@ -129,7 +128,7 @@ def copyfileobj(src, dst, length=None):
 
     bufsize = 16 * 1024
     blocks, remainder = divmod(length, bufsize)
-    for b in range(blocks):
+    for _ in range(blocks):
         buf = src.read(bufsize)
         if len(buf) < bufsize:
             raise IOError("end of file reached")
@@ -235,7 +234,7 @@ class _LowLevelFile(object):
 
     def write(self, s):
         os.write(self.fd, s)
-
+# FileObj = Union[]
 class _Stream(object):
     """Class that serves as an adapter between CpioFile and
        a stream-like object.  The stream-like object only
@@ -248,6 +247,7 @@ class _Stream(object):
     """
 
     def __init__(self, name, mode, comptype, fileobj, bufsize):
+        # type: (str | None, str, str, IO[Any] | _LowLevelFile | _StreamProxy | None, int | None) -> None
         """Construct a _Stream object.
         """
         self._extfileobj = True
@@ -265,6 +265,7 @@ class _Stream(object):
         self.mode     = mode
         self.comptype = comptype
         self.fileobj  = fileobj
+        # assert self.fileobj
         self.bufsize  = bufsize
         self.buf      = b""
         self.pos      = 0
@@ -285,7 +286,7 @@ class _Stream(object):
         if comptype == "bz2":
             if mode == "r":
                 self.dbuf = b""
-                self.cmp = bz2.BZ2Decompressor()
+                self.cmp = bz2.BZ2Decompressor()  # type: Any
             else:
                 self.cmp = bz2.BZ2Compressor()
 
@@ -334,14 +335,14 @@ class _Stream(object):
         """
         self.buf += s
         while len(self.buf) > self.bufsize:
-            self.fileobj.write(self.buf[:self.bufsize])
+            cast (_LowLevelFile, self.fileobj).write(self.buf[:self.bufsize])
             self.buf = self.buf[self.bufsize:]
 
     def close(self):
         """Close the _Stream object. No operation should be
            done on it afterwards.
         """
-        if self.closed:
+        if self.closed or not self.fileobj:
             return
 
         if self.mode == "w" and self.comptype != "cpio":
@@ -469,9 +470,9 @@ class _Stream(object):
 # class _Stream
 
 class _StreamProxy(object):
-    """Small proxy class that enables transparent compression
-       detection for the Stream interface (mode 'r|*').
-    """
+    """Transparent compression detection for the Stream interface (mode 'r|*')"""
+    def write(self, _):
+        raise IOError("CpioFile initialized for transparent decompression does not support write()")
 
     def __init__(self, fileobj):
         self.fileobj = fileobj
@@ -507,11 +508,13 @@ class _CMPProxy(object):
         self.pos = None
 
     def read(self, size):
+        assert self.buf
         b = [self.buf]
         x = len(self.buf)
         while x < size:
             try:
                 raw = self.fileobj.read(self.blocksize)
+                assert self.cmpobj
                 data = self.cmpobj.decompress(raw)
                 b.append(data)
             except EOFError:
@@ -521,6 +524,7 @@ class _CMPProxy(object):
 
         buf = self.buf[:size]
         self.buf = self.buf[size:]
+        assert self.pos
         self.pos += len(buf)
         return buf
 
@@ -537,12 +541,15 @@ class _CMPProxy(object):
         return self.pos
 
     def write(self, data):
+        assert self.pos
+        assert self.cmpobj
         self.pos += len(data)
         raw = self.cmpobj.compress(data)
         self.fileobj.write(raw)
 
     def close(self):
         if self.mode == "w":
+            assert self.cmpobj
             raw = self.cmpobj.flush()
             self.fileobj.write(raw)
         self.fileobj.close()
@@ -558,7 +565,7 @@ class _BZ2Proxy(_CMPProxy):
     """
 
     def __init__(self, fileobj, mode):
-        # type:(IO[Any], _ReadBinaryMode | _WriteBinaryMode) -> None
+        # type:(IO[Any], str) -> None
         _CMPProxy.__init__(self, fileobj, mode)
         self.init()
 
@@ -794,6 +801,7 @@ class CpioInfo(object):
     """
 
     def __init__(self, name=""):
+        # type:(str | bytes) -> None
         """Construct a CpioInfo object. name is the optional name
            of the member.
         """
@@ -870,8 +878,8 @@ class CpioInfo(object):
             # pad to next word
             buf += (WORDSIZE - remainder) * NUL
 
-        if self.linkname != '':
-            buf += self.linkname
+        if self.linkname:
+            buf += six.ensure_binary(self.linkname)
             _, remainder = divmod(len(buf), WORDSIZE)
             if remainder != 0:
                 # pad to next word
@@ -911,8 +919,7 @@ class CpioFile(six.Iterator):
     dereference = False         # If true, add content of linked file to the
                                 # cpio file, else the link.
 
-    hardlinks = True		# If true, only add content for the first
-    				# hard link, else treat as regular file.
+    hardlinks = True  # Only add content for the first hard link, else treat as regular file
 
     errorlevel = 0              # If 0, fatal errors only appear in debug
                                 # messages (if debug >= 0). If > 0, errors
@@ -921,6 +928,7 @@ class CpioFile(six.Iterator):
     fileobject = ExFileObject
 
     def __init__(self, name=None, mode="r", fileobj=None):
+        # type:(str | None, str, IO[Any] | GzipFile | _Stream | None) -> None
         """Open an (uncompressed) cpio archive `name'. `mode' is either 'r' to
            read from an existing archive, 'a' to append data to an existing
            file or 'w' to create a new file overwriting an existing one. `mode'
@@ -935,13 +943,13 @@ class CpioFile(six.Iterator):
         self.mode = {"r": "rb", "a": "r+b", "w": "wb"}[mode]
 
         if not fileobj:
-            fileobj = bltn_open(name, self.mode)
+            fileobj = bltn_open(cast(str, name), self.mode)
             self._extfileobj = False
         else:
             if name is None and hasattr(fileobj, "name"):
                 name = fileobj.name
             if hasattr(fileobj, "mode"):
-                self.mode = fileobj.mode
+                self.mode = cast(str, fileobj.mode)
             self._extfileobj = True
         self.name = None
         if name:
@@ -950,8 +958,11 @@ class CpioFile(six.Iterator):
         self.fileobj = fileobj
 
         # Init datastructures
+        self.filename = ""
+        self.file_size = 0
+        self.date_time = time.gmtime(0.0)
         self.closed = False
-        self.members = []       # list of members as CpioInfo objects
+        self.members = []       # type:list[CpioInfo]
         self._loaded = False    # flag if all members have been read
         self.offset = 0        # current position in the archive file
         self.inodes = {}        # dictionary caching the inodes of
@@ -994,6 +1005,7 @@ class CpioFile(six.Iterator):
 
     @classmethod
     def open(cls, name=None, mode="r", fileobj=None, bufsize=20*512):
+        # type: (str | None, str, IO[Any] | None, Optional[int]) -> Any
         """Open a cpio archive for reading, writing or appending. Return
            an appropriate CpioFile class.
 
@@ -1013,11 +1025,9 @@ class CpioFile(six.Iterator):
            'r|'         open an uncompressed stream of cpio blocks for reading
            'r|gz'       open a gzip compressed stream of cpio blocks
            'r|bz2'      open a bzip2 compressed stream of cpio blocks
-           'r|xz'       open a xz compressed stream of cpio blocks
            'w|'         open an uncompressed stream for writing
            'w|gz'       open a gzip compressed stream for writing
            'w|bz2'      open a bzip2 compressed stream for writing
-           'w|xz'       open a xz compressed stream for writing
         """
 
         if not name and not fileobj:
@@ -1027,6 +1037,7 @@ class CpioFile(six.Iterator):
             # Find out which *open() is appropriate for opening the file.
             for comptype in cls.OPEN_METH:
                 func = getattr(cls, cls.OPEN_METH[comptype])
+                saved_pos = -1  # Silence pyright: reportUnboundVariable, the code is correct
                 if fileobj is not None:
                     saved_pos = fileobj.tell()
                 try:
@@ -1070,7 +1081,7 @@ class CpioFile(six.Iterator):
 
     @classmethod
     def cpioopen(cls, name, mode="r", fileobj=None):
-        # type:(str, _ReadBinaryMode | _WriteBinaryMode, IO[Any] | GzipFile | None) -> CpioFile
+        # type:(str | None, str | str, IO[Any] | GzipFile | None) -> CpioFile
         """Open uncompressed cpio archive name for reading or writing.
         """
         if len(mode) > 1 or mode not in "raw":
@@ -1180,6 +1191,7 @@ class CpioFile(six.Iterator):
         self.closed = True
 
     def getmember(self, name):
+        # type:(str | bytes) -> CpioInfo
         """Return a CpioInfo object for member `name'. If `name' can not be
            found in the archive, KeyError is raised. If a member occurs more
            than once in the archive, its last occurence is assumed to be the
@@ -1191,6 +1203,7 @@ class CpioFile(six.Iterator):
         return cpioinfo
 
     def getmembers(self):
+        # type:() -> list[CpioInfo]
         """Return the members of the archive as a list of CpioInfo objects. The
            list has the same order as the members in the archive.
         """
@@ -1238,9 +1251,9 @@ class CpioFile(six.Iterator):
         # and if symlinks shall be resolved.
         if fileobj is None:
             if hasattr(os, "lstat") and not self.dereference:
-                statres = os.lstat(name)
+                statres = os.lstat(cast(str, name))
             else:
-                statres = os.stat(name)
+                statres = os.stat(cast(str, name))
         else:
             statres = os.fstat(fileobj.fileno())
 
@@ -1253,7 +1266,7 @@ class CpioFile(six.Iterator):
         cpioinfo.uid = statres.st_uid
         cpioinfo.gid = statres.st_gid
         cpioinfo.nlink = statres.st_nlink
-        cpioinfo.mtime = statres.st_mtime
+        cpioinfo.mtime = int(statres.st_mtime)
         if stat.S_ISREG(stmd):
             cpioinfo.size = statres.st_size
         else:
@@ -1264,7 +1277,7 @@ class CpioFile(six.Iterator):
             cpioinfo.rdevmajor = os.major(statres.st_rdev)
             cpioinfo.rdevminor = os.minor(statres.st_rdev)
         if stat.S_ISLNK(stmd):
-            cpioinfo.linkname = os.readlink(name)
+            cpioinfo.linkname = os.readlink(cast(str, name))
         cpioinfo.namesize = len(arcname)
         cpioinfo.name = arcname
 
@@ -1439,7 +1452,7 @@ class CpioFile(six.Iterator):
 
         # Prepare the link target for makelink().
         if cpioinfo.islnk():
-            cpioinfo._link_path = path
+            cpioinfo._link_path = path  # type:ignore[reportGeneralTypeIsssues]
 
         try:
             self._extract_member(cpioinfo, os.path.join(path, six.ensure_text(cpioinfo.name)))
@@ -1458,6 +1471,7 @@ class CpioFile(six.Iterator):
                 self._dbg(1, "cpiofile: %s" % e)
 
     def extractfile(self, member):
+        # type:(CpioInfo | str | bytes | None) -> ExFileObject | None
         """Extract a member from the archive as a file object. `member' may be
            a filename or a CpioInfo object. If `member' is a regular file, a
            file-like object is returned. If `member' is a link, a file-like
@@ -1471,7 +1485,7 @@ class CpioFile(six.Iterator):
         if isinstance(member, CpioInfo):
             cpioinfo = member
         else:
-            cpioinfo = self.getmember(member)
+            cpioinfo = self.getmember(cast(str, member))
 
         if cpioinfo.isreg():
             return self.fileobject(self, cpioinfo)
@@ -1712,7 +1726,7 @@ class CpioFile(six.Iterator):
 
             if cpioinfo.issym():
                 linkname_buf = self.fileobj.read(self._word(cpioinfo.size))
-                cpioinfo.linkname = linkname_buf.rstrip(NUL)
+                cpioinfo.linkname = six.ensure_text(linkname_buf.rstrip(NUL))
                 self.offset += self._word(cpioinfo.size)
                 cpioinfo.size = 0
 
@@ -1763,6 +1777,7 @@ class CpioFile(six.Iterator):
         return cpioinfo
 
     def _getmember(self, name, cpioinfo=None):
+        # type:(str | bytes, CpioInfo | None) -> CpioInfo | None
         """Find an archive member by name from bottom to top.
            If cpioinfo is given, it is used as the starting point.
         """
@@ -1778,6 +1793,7 @@ class CpioFile(six.Iterator):
         for i in range(end - 1, -1, -1):
             if encoded_name == members[i].name:
                 return members[i]
+        return None
 
     def _load(self):
         """Read through the entire archive file and look for readable

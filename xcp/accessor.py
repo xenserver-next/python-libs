@@ -30,10 +30,15 @@ import os
 import tempfile
 import errno
 
-from six.moves import urllib  # pyright: ignore
+# pylint: disable-next=unused-import
+from typing import cast, Any, IO, TYPE_CHECKING
 
-import xcp.mount as mount
-import xcp.logger as logger
+from six.moves import urllib
+
+from xcp import logger, mount
+
+if TYPE_CHECKING:
+    from typing_extensions import Literal
 
 # maps errno codes to HTTP error codes
 # needed for error code consistency
@@ -53,22 +58,22 @@ class Accessor(object):
         self.read_only = ro
         self.lastError = 0
 
-    def access(self, name):
+    def access(self, path):
         """ Return boolean determining where 'name' is an accessible object
         in the target. """
         try:
-            f = self.openAddress(name)
+            f = self.openAddress(path)
             if not f:
                 return False
-            f.close()
-        except Exception as e:
+            f.close()  # pylint: disable=no-member
+        except Exception:
             return False
-
         return True
 
     def openAddress(self, address):
-        """should be overloaded"""
-        pass
+        # type:(str) -> IO[Any] | Literal[False]
+        """must be overloaded"""
+        return False
 
     def canEject(self):
         return False
@@ -97,19 +102,13 @@ class FilesystemAccessor(Accessor):
     def openAddress(self, address):
         try:
             filehandle = open(os.path.join(self.location, address), "rb")
-        except OSError as e:
+        except (OSError, IOError) as e:
             if e.errno == errno.EIO:
                 self.lastError = 5
             else:
                 self.lastError = mapError(e.errno)
             return False
-        except IOError as e:
-            if e.errno == errno.EIO:
-                self.lastError = 5
-            else:
-                self.lastError = mapError(e.errno)
-            return False
-        except Exception as e:
+        except Exception:
             self.lastError = 500
             return False
         return filehandle
@@ -156,13 +155,15 @@ class MountingAccessor(FilesystemAccessor):
             return
         self.start_count -= 1
         if self.start_count == 0:
+            assert self.location
             mount.umount(self.location)
             os.rmdir(self.location)
             self.location = None
 
     def writeFile(self, in_fh, out_name):
+        assert self.location
         logger.info("Copying to %s" % os.path.join(self.location, out_name))
-        out_fh = open(os.path.join(self.location, out_name), 'w')
+        out_fh = open(os.path.join(self.location, out_name), "wb")
         return self._writeFile(in_fh, out_fh)
 
     def __del__(self):
@@ -218,26 +219,20 @@ class FileAccessor(Accessor):
     def openAddress(self, address):
         try:
             file = open(os.path.join(self.baseAddress, address), "rb")
-        except IOError as e:
+        except (IOError, OSError) as e:
             if e.errno == errno.EIO:
                 self.lastError = 5
             else:
                 self.lastError = mapError(e.errno)
             return False
-        except OSError as e:
-            if e.errno == errno.EIO:
-                self.lastError = 5
-            else:
-                self.lastError = mapError(e.errno)
-            return False
-        except Exception as e:
+        except Exception:
             self.lastError = 500
             return False
         return file
 
     def writeFile(self, in_fh, out_name):
         logger.info("Copying to %s" % os.path.join(self.baseAddress, out_name))
-        out_fh = open(os.path.join(self.baseAddress, out_name), 'w')
+        out_fh = open(os.path.join(self.baseAddress, out_name), "wb")
         return self._writeFile(in_fh, out_fh)
 
     def __repr__(self):
@@ -265,7 +260,7 @@ class FTPAccessor(Accessor):
     def _cleanup(self):
         if self.cleanup:
             # clean up after RETR
-            self.ftp.voidresp()
+            cast(ftplib.FTP, self.ftp).voidresp()
             self.cleanup = False
 
     def start(self):
@@ -275,9 +270,9 @@ class FTPAccessor(Accessor):
             port = ftplib.FTP_PORT
             if self.url_parts.port:
                 port = self.url_parts.port
-            self.ftp.connect(self.url_parts.hostname, port)
-            username = self.url_parts.username
-            password = self.url_parts.password
+            self.ftp.connect(cast(str, self.url_parts.hostname), port)
+            username = cast(str, self.url_parts.username)
+            password = cast(str, self.url_parts.password)
             if username:
                 username = urllib.parse.unquote(username)
             if password:
@@ -296,9 +291,9 @@ class FTPAccessor(Accessor):
             return
         self.start_count -= 1
         if self.start_count == 0:
-            self.ftp.quit()
+            cast(ftplib.FTP, self.ftp).quit()
             self.cleanup = False
-            self.ftp = None
+            # self.ftp = None
 
     def access(self, path):
         try:
@@ -306,23 +301,18 @@ class FTPAccessor(Accessor):
             self._cleanup()
             url = urllib.parse.unquote(path)
 
+            assert self.ftp
             if self.ftp.size(url) is not None:
                 return True
             lst = self.ftp.nlst(os.path.dirname(url))
-            return os.path.basename(url) in list(map(os.path.basename, lst))
-        except IOError as e:
+            return os.path.basename(url) in (os.path.basename(direntry) for direntry in lst)
+        except (IOError, OSError) as e:
             if e.errno == errno.EIO:
                 self.lastError = 5
             else:
                 self.lastError = mapError(e.errno)
             return False
-        except OSError as e:
-            if e.errno == errno.EIO:
-                self.lastError = 5
-            else:
-                self.lastError = mapError(e.errno)
-            return False
-        except Exception as e:
+        except Exception:
             self.lastError = 500
             return False
 
@@ -331,6 +321,7 @@ class FTPAccessor(Accessor):
         self._cleanup()
         url = urllib.parse.unquote(address)
 
+        assert self.ftp
         self.ftp.voidcmd('TYPE I')
         socket = self.ftp.transfercmd('RETR ' + url)
         buffered_reader = socket.makefile('rb')
@@ -344,7 +335,7 @@ class FTPAccessor(Accessor):
         fname = urllib.parse.unquote(out_name)
 
         logger.debug("Storing as " + fname)
-        self.ftp.storbinary('STOR ' + fname, in_fh)
+        cast(ftplib.FTP, self.ftp).storbinary('STOR ' + fname, in_fh)
 
     def __repr__(self):
         return "<FTPAccessor: %s>" % self.baseAddress
@@ -355,15 +346,11 @@ class HTTPAccessor(Accessor):
         super(HTTPAccessor, self).__init__(ro)
         self.url_parts = urllib.parse.urlsplit(baseAddress, allow_fragments=False)
 
-        if self.url_parts.username:
-            username = self.url_parts.username
-            if username is not None:
-                username = urllib.parse.unquote(self.url_parts.username)
-            password = self.url_parts.password
-            if password is not None:
-                password = urllib.parse.unquote(self.url_parts.password)
+        if self.url_parts.username and self.url_parts.password:
+            username = urllib.parse.unquote(self.url_parts.username)
+            password = urllib.parse.unquote(self.url_parts.password)
             self.passman = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-            self.passman.add_password(None, self.url_parts.hostname,
+            self.passman.add_password(None, cast(str, self.url_parts.hostname),
                                       username, password)
             self.authhandler = urllib.request.HTTPBasicAuthHandler(self.passman)
             self.opener = urllib.request.build_opener(self.authhandler)

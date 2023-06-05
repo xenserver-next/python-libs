@@ -25,6 +25,7 @@
 
 import subprocess
 import sys
+from typing import cast, Any, Sequence  # pylint: disable=unused-import #, Tuple, Union
 
 from xcp import logger
 from xcp.compat import open_defaults_for_utf8_text
@@ -44,6 +45,7 @@ def _encode_command_to_bytes(command):
     return command
 
 def runCmd(command, with_stdout=False, with_stderr=False, inputtext=None, **kwargs):
+    # type:(...) -> Any
     # sourcery skip: assign-if-exp, hoist-repeated-if-condition, reintroduce-else
 
     if inputtext is not None:
@@ -64,7 +66,7 @@ def runCmd(command, with_stdout=False, with_stderr=False, inputtext=None, **kwar
                            stderr=subprocess.PIPE,
                            shell=not isinstance(command, list),
                            **kwargs)
-    (out, err) = cmd.communicate(inputtext)
+    (out, err) = cmd.communicate(cast(str, inputtext))
     rv = cmd.returncode
 
     l = "ran %s; rc %d" % (str(command), rv)

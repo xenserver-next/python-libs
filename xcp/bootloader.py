@@ -44,8 +44,10 @@ class MenuEntry(object):
     def __init__(self, hypervisor, hypervisor_args, kernel, kernel_args,
                  initrd, title = None, tboot = None, tboot_args = None,
                  root = None):
+        self.extra = None
+        self.contents = []
         self.tboot = tboot
-        self.tboot_args = tboot_args
+        self.tboot_args = tboot_args  # type: str | None
         self.hypervisor = hypervisor
         self.hypervisor_args = hypervisor_args
         self.kernel = kernel
@@ -55,7 +57,7 @@ class MenuEntry(object):
         self.root = root
 
     def getTbootArgs(self):
-        return re.findall(r'\S[^ "]*(?:"[^"]*")?\S*', self.tboot_args)
+        return re.findall(r'\S[^ "]*(?:"[^"]*")?\S*', cast(str, self.tboot_args))
 
     def setTbootArgs(self, args):
         self.tboot_args = ' '.join(args)
@@ -76,7 +78,7 @@ class Bootloader(object):
     def __init__(self, src_fmt, src_file, menu = None, menu_order = None,
                  default = None, timeout = None, serial = None,
                  location = None, env_block = None):
-
+        self.boilerplate = []
         if menu is None:
             menu = {}
 
@@ -103,7 +105,7 @@ class Bootloader(object):
 
     @classmethod
     def readExtLinux(cls, src_file):
-        menu = {}
+        menu = {}  # type: dict[str, MenuEntry | dict[str, str]]
         menu_order = []
         default = None
         timeout = None
@@ -134,6 +136,8 @@ class Bootloader(object):
                         else:
                             baud = els[2]
                             flow = None
+                    else:
+                        flow = None
                     serial = {'port': int(els[1]), 'baud': int(baud), 'flow': flow}
                 elif keywrd == 'default' and len(els) == 2:
                     default = els[1]
@@ -278,8 +282,9 @@ class Bootloader(object):
                         kernel_args = hypervisor_args
                         label = create_label(title)
                         menu_order.append(label)
-                        # pylint: disable-next=no-value-for-parameter
-                        menu[label] = MenuEntry(kernel = kernel,
+                        menu[label] = MenuEntry(None,
+                                                None,
+                                                kernel = kernel,
                                                 kernel_args = kernel_args,
                                                 initrd = els[1], title = title)
                         hypervisor = None
@@ -311,9 +316,9 @@ class Bootloader(object):
         initrd = None
         root = None
         menu_entry_extra = None
-        menu_entry_contents = []
-        boilerplate = []
-        boilerplates = []
+        menu_entry_contents = []  # type: list[str]
+        boilerplate = []  # type: list[str]
+        boilerplates = []  # type: list[str]
 
         def create_label(title):
             global COUNTER
@@ -347,10 +352,10 @@ class Bootloader(object):
                 # Only parse unindented default and timeout lines to prevent
                 # changing these lines in if statements.
                 if l.startswith('set default=') and l == line.rstrip():
-                    default = l.split('=')[1]
-                    match = re.match(r"['\"](.*)['\"]$", default)
+                    default_value = l.split('=')[1]
+                    match = re.match(r"['\"](.*)['\"]$", default_value)
                     if match:
-                        default = match.group(1)
+                        default = int(match.group(1))
                 elif l.startswith('set timeout=') and l == line.rstrip():
                     timeout = int(l.split('=')[1]) * 10
                 elif l.startswith('serial'):
@@ -383,7 +388,7 @@ class Bootloader(object):
                                      'fi',
                                      '']
                             boilerplate += extra
-                    boilerplates.append(boilerplate)
+                    boilerplates.extend(boilerplate)
                     boilerplate = []
                 elif title:
                     if l.startswith("multiboot2"):
@@ -451,8 +456,8 @@ class Bootloader(object):
 
         env_block = os.path.join(os.path.dirname(src_file), 'grubenv')
         bootloader = cls('grub2', src_file, menu, menu_order, default,
-                         timeout, serial, env_block = env_block)
-        bootloader.boilerplate = boilerplates  # pylint: disable=attribute-defined-outside-init
+                         timeout, serial, env_block = env_block)  # type: Bootloader
+        bootloader.boilerplate = boilerplates
         return bootloader
 
     @classmethod
@@ -465,7 +470,7 @@ class Bootloader(object):
             return cls.readGrub2(os.path.join(root, "boot/grub2/grub.cfg"))
         elif os.path.exists(os.path.join(root, "boot/extlinux.conf")):
             return cls.readExtLinux(os.path.join(root, "boot/extlinux.conf"))
-        elif os.path.exists(os.path.join(root, "boot/grub/menu.lst")):
+        elif os.path.exists(os.path.join(root, "boot/grub/menu.lst")):  # pragma: no cover
             return cls.readGrub(os.path.join(root, "boot/grub/menu.lst"))
         else:
             raise RuntimeError("No existing bootloader configuration found")
@@ -505,7 +510,7 @@ class Bootloader(object):
                 print("  kernel mboot.c32", file=fh)
                 print("  append %s %s --- %s %s --- %s" %
                       (m.hypervisor, m.hypervisor_args, m.kernel, m.kernel_args, m.initrd), file=fh)
-            else:
+            else:  # pragma: no cover
                 print("  kernel " + m.kernel, file=fh)
                 print("  append " + m.kernel_args, file=fh)
                 print("  initrd " + m.initrd, file=fh)
@@ -540,7 +545,7 @@ class Bootloader(object):
                 print("   kernel " + m.hypervisor + " " + m.hypervisor_args, file=fh)
                 print("   module " + m.kernel + " " + m.kernel_args, file=fh)
                 print("   module " + m.initrd, file=fh)
-            else:
+            else:  # pragma: no cover
                 print("   kernel " + m.kernel + " " + m.kernel_args, file=fh)
                 print("   initrd " + m.initrd, file=fh)
         if not hasattr(dst_file, 'name'):

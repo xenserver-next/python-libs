@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import unittest
 import warnings
+from typing import cast
 
 import xcp.cpiofile
 from xcp.cpiofile import CpioFile, CpioFileCompat, CPIO_PLAIN, CPIO_GZIPPED
@@ -71,7 +72,7 @@ class TestCpio(unittest.TestCase):
         found = False
         for f in arc:
             if f.isfile():
-                data = arc.extractfile(f).read()
+                data = cast(xcp.cpiofile.ExFileObject, arc.extractfile(f)).read()
                 self.assertEqual(len(data), f.size)
                 self.assertEqual(self.md5data, md5(data).hexdigest())
                 found = True

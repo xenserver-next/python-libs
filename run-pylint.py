@@ -32,10 +32,10 @@ from glob import glob
 from io import StringIO, TextIOWrapper
 from typing import List
 
-from pylint.lint import Run  # type: ignore
-from pylint.reporters import JSONReporter  # tpe: ignore
+from pylint.lint import Run  # type: ignore[import]
+from pylint.reporters import JSONReporter  # type: ignore[import]
 
-import pandas as pd
+import pandas as pd  # type: ignore[import]
 
 
 def del_dict_keys(r, *args):

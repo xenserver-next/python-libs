@@ -33,6 +33,7 @@ class MountException(Exception):
     pass
 
 def mount(dev, mountpoint, options = None, fstype = None, label = None):
+    # type:(str, str, list[str] | None, str | None, str | None) -> None
     cmd = ['/bin/mount']
     if options:
         assert type(options) == list

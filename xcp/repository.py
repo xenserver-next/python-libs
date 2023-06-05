@@ -258,6 +258,10 @@ class Repository(BaseRepository):
         self._md5 = md5()
         self.requires = []
         self.packages = []
+        self.name = ""
+        self.version = ""
+        self.build = ""
+        self.originator = ""
 
         access.start()
 
@@ -355,7 +359,7 @@ class Repository(BaseRepository):
     constructor_map = {
         'tbz2': [ BzippedPackage, ( 'label', 'size', 'md5', 'optional', 'fname', 'root' ) ],
         'rpm': [ RPMPackage, ( 'label', 'size', 'md5', 'optional', 'fname', 'options' ) ],
-        'driver-rpm': [ DriverRPMPackage, ( 'label', 'size', 'md5', 'fname', 'kernel', 'options' ) ],
+        'driver-rpm': [DriverRPMPackage, ('label', 'size', 'md5', 'fname', 'kernel', 'options')],
         # obsolete
         'driver': [ DriverPackage, ( 'label', 'size', 'md5', 'fname', 'root' ) ],
         'firmware': [ FirmwarePackage, ('label', 'size', 'md5', 'fname') ]

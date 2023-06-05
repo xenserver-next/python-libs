@@ -23,7 +23,7 @@ if sys.version_info >= (3, 0):
         # Needed for Python 3.6 when no UTF-8 locale is set:
         kwargs.setdefault("encoding", encoding)
         kwargs.setdefault("errors", "replace")  # Simple codec error handler: Replace malformed char
-        return open(filename, mode, **kwargs)  # type: ignore[call-overload]
+        return open(filename, mode, **kwargs)
 
 else:
     open_utf8 = {}

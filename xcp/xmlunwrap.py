@@ -22,16 +22,20 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """xmlunwrap - general methods to unwrap XML elements & attributes"""
+from xml.dom.minidom import Element
+
+from typing import Any, Optional, cast
 
 import six
 
 class XmlUnwrapError(Exception):
     pass
 
-def getText(nodelist):
+def getText(element):
+    # type:(Element) -> str
+    """Return the text of the element as stripped string"""
     rc = ""
-
-    for node in nodelist.childNodes:
+    for node in element.childNodes:
         if node.nodeType == node.TEXT_NODE:
             rc = rc + node.data
     if not isinstance(rc, str):  # Python 2 only, otherwise it would return unicode
@@ -47,39 +51,43 @@ def getElementsByTagName(el, tags, mandatory = False):
     return matching
 
 def getStrAttribute(el, attrs, default = '', mandatory = False):
-    matching = []
+    # type:(Element, list[str], Optional[str], Optional[bool]) -> str
+    matching = []  # type: list[str]
     for attr in attrs:
         val = el.getAttribute(attr)
         if not isinstance(val, str):  # Python 2 only, otherwise it would return unicode
             val = val.encode()
         if val != '':
             matching.append(val)
-    if len(matching) == 0:
+    if not matching:
         if mandatory:
             raise XmlUnwrapError("Missing mandatory attribute %s" % attrs[0])
-        return default
+        return cast(str, default)
     return matching[0]
 
 def getBoolAttribute(el, attrs, default = None):
+    # type:(Element, list[str], Optional[bool]) -> bool | None
     mandatory = (default == None)
-    val = getStrAttribute(el, attrs, '', mandatory).lower()
-    if val == '':
-        return default
-    return val in ['yes', 'true']
+    # Will raise an exception if attribute is not found and default is None:
+    val = getStrAttribute(el, attrs, '', mandatory).lower()  # ype: ignore
+    return default if val == '' else val in ['yes', 'true']
 
 def getIntAttribute(el, attrs, default = None):
+    # type:(Element, list[str], Optional[int]) -> int | None
     mandatory = (default == None)
     val = getStrAttribute(el, attrs, '', mandatory)
-    if val == '':
+    if not val:  # return default if val is None or ""
         return default
     try:
         return int(val, 0)
     except Exception as e:
         six.raise_from(XmlUnwrapError("Invalid integer value for %s" % attrs[0]), e)
+    return None
 
 def getMapAttribute(el, attrs, mapping, default = None):
+    # type:(Element, list[str], list[tuple[str, int]], Optional[str]) -> Any
     mandatory = (default == None)
-    k, v = zip(*mapping)
+    k, v = zip(*mapping)  # ype: list[tuple[str, int]], tuple[str, int])
     key = getStrAttribute(el, attrs, default, mandatory)
 
     if key not in k:

@@ -31,6 +31,7 @@ __version__ = "1.0.1"
 __author__ = "Andrew Cooper"
 
 from subprocess import Popen, PIPE
+from typing import Any, cast
 
 from xcp.logger import LOG
 
@@ -50,6 +51,7 @@ def ip_link_set_name(src_name, dst_name):
       "ip link set $src_name name $dst_name"
     """
 
+    link_down = None
     LOG.debug("Attempting rename %s -> %s" % (src_name, dst_name))
 
     # Is the interface currently up?
@@ -96,9 +98,9 @@ def ip_link_set_name(src_name, dst_name):
         link_up.wait()
 
         if link_up.returncode != 0:
+            # pylint: disable=unsubscriptable-object
             LOG.error("Unable to bring link %s back up. (Exit %d)"
-                      % (src_name, link_down.returncode))
+                      % (src_name, cast(Popen[Any], link_down).returncode))
             return
 
     LOG.info("Succesfully renamed link %s to %s" % (src_name, dst_name))
-
