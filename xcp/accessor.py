@@ -60,15 +60,15 @@ class Accessor(object):
             f = self.openAddress(path)
             if not f:
                 return False
-            f.close()
-        except Exception as e:
+            f.close()  # pylint: disable=no-member
+        except Exception:
             return False
-
         return True
 
     def openAddress(self, address):
-        """should be overloaded"""
-        pass
+        # type:(str) -> IO[Any] | Literal[False]
+        """must be overloaded"""
+        return False
 
     def canEject(self):
         return False
