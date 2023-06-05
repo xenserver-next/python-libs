@@ -36,7 +36,7 @@ import branding
 
 import xcp.cmd
 
-from .compat import open_with_codec_handling
+from .compat import open_textfile
 
 COUNTER = 0
 
@@ -113,7 +113,7 @@ class Bootloader(object):
         title = None
         kernel = None
 
-        fh = open_with_codec_handling(src_file, encoding="utf-8")
+        fh = open_textfile(src_file, "r")
         try:
             for line in fh:
                 l = line.strip()
@@ -221,7 +221,7 @@ class Bootloader(object):
             COUNTER += 1
             return "label%d" % COUNTER
 
-        fh = open_with_codec_handling(src_file, encoding="utf-8")
+        fh = open_textfile(src_file, "r")
         try:
             for line in fh:
                 l = line.strip()
@@ -338,7 +338,7 @@ class Bootloader(object):
             COUNTER += 1
             return "label%d" % COUNTER
 
-        fh = open_with_codec_handling(src_file, encoding="utf-8")
+        fh = open_textfile(src_file, "r")
         try:
             for line in fh:
                 l = line.strip()
@@ -474,7 +474,7 @@ class Bootloader(object):
         if dst_file and hasattr(dst_file, 'name'):
             fh = dst_file
         else:
-            fh = open_with_codec_handling(cast(str, dst_file), "w", encoding="utf-8")
+            fh = open_textfile(cast(str, dst_file), "w")
         print("# location " + self.location, file=fh)
 
         if self.serial:
@@ -516,7 +516,7 @@ class Bootloader(object):
         if dst_file and hasattr(dst_file, 'name'):
             fh = dst_file
         else:
-            fh = open_with_codec_handling(cast(str, dst_file), "w", encoding="utf-8")
+            fh = open_textfile(cast(str, dst_file), "w")
         print("# location " + self.location, file=fh)
 
         if self.serial:
@@ -550,7 +550,7 @@ class Bootloader(object):
         if dst_file and hasattr(dst_file, 'name'):
             fh = dst_file
         else:
-            fh = open_with_codec_handling(cast(str, dst_file), "w", encoding="utf-8")
+            fh = open_textfile(cast(str, dst_file), "w")
 
         if self.serial:
             print("serial --unit=%s --speed=%s" % (self.serial['port'],
