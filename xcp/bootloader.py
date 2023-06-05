@@ -123,8 +123,7 @@ class Bootloader(object):
                 keywrd = els[0].lower()
 
                 # header
-                if (l.startswith('# location ') and len(els) == 3 and
-                    els[2] in ['mbr', 'partition']):
+                if l.startswith('# location ') and len(els) == 3 and els[2] in ['mbr', 'partition']:
                     location = els[2]
                 elif keywrd == 'serial' and len(els) > 1:
                     baud = '9600'
@@ -230,8 +229,7 @@ class Bootloader(object):
                     continue
 
                 # header
-                if (l.startswith('# location ') and len(els) == 3 and
-                    els[2] in ['mbr', 'partition']):
+                if l.startswith('# location ') and len(els) == 3 and els[2] in ['mbr', 'partition']:
                     location = els[2]
                 elif els[0] == 'serial' and len(els) > 1:
                     port = 0
@@ -278,8 +276,9 @@ class Bootloader(object):
                         kernel_args = hypervisor_args
                         label = create_label(title)
                         menu_order.append(label)
-                        # pylint: disable-next=no-value-for-parameter
-                        menu[label] = MenuEntry(kernel = kernel,
+                        menu[label] = MenuEntry(None,
+                                                None,
+                                                kernel = kernel,
                                                 kernel_args = kernel_args,
                                                 initrd = els[1], title = title)
                         hypervisor = None
@@ -369,8 +368,8 @@ class Bootloader(object):
                         # Add boilerplate to read override entry from environment
                         # block if not present
                         override_bp = False
-                        for line in boilerplate:
-                            if 'load_env' in line:
+                        for boilerplate_line in boilerplate:
+                            if 'load_env' in boilerplate_line:
                                 override_bp = True
                                 break
                         if not override_bp:
