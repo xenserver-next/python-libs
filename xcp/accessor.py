@@ -53,11 +53,11 @@ class Accessor(object):
         self.read_only = ro
         self.lastError = 0
 
-    def access(self, name):
+    def access(self, path):
         """ Return boolean determining where 'name' is an accessible object
         in the target. """
         try:
-            f = self.openAddress(name)
+            f = self.openAddress(path)
             if not f:
                 return False
             f.close()
