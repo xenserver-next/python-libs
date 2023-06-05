@@ -22,12 +22,12 @@ def test_GrubLegacyExtLinuxWithTempFile(tmpdir):
     """Note: GRUB-Legacy and EXTLINUX code can likely be removed (pending approval)"""
     bootloader = Bootloader.readGrub2("tests/data/grub-linux.cfg")
     filename = str(tmpdir.mkdir("grub").join("menu.lst"))
-    bootloader.menu_order.remove("xe-tboot")
-    bootloader.menu.pop("xe-tboot")
-    bootloader.writeGrub(filename)
-    Bootloader.readGrub(filename)
     bootloader.writeExtLinux(filename)
     Bootloader.readExtLinux(filename)
+    bootloader.menu.pop("xe-tboot")
+    bootloader.menu_order.remove("xe-tboot")
+    bootloader.writeGrub(filename)
+    Bootloader.readGrub(filename)
 
 class TestBootloader(unittest.TestCase):
     def test_grub2(self):
