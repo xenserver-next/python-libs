@@ -30,10 +30,15 @@ import os
 import tempfile
 import errno
 
-from six.moves import urllib  # pyright: ignore
+# pylint: disable-next=unused-import
+from typing import cast, Any, IO, TYPE_CHECKING
 
-import xcp.mount as mount
-import xcp.logger as logger
+from six.moves import urllib
+
+from xcp import logger, mount
+
+if TYPE_CHECKING:
+    from typing_extensions import Literal
 
 # maps errno codes to HTTP error codes
 # needed for error code consistency
@@ -253,7 +258,7 @@ class FTPAccessor(Accessor):
     def _cleanup(self):
         if self.cleanup:
             # clean up after RETR
-            self.ftp.voidresp()
+            cast(ftplib.FTP, self.ftp).voidresp()
             self.cleanup = False
 
     def start(self):
@@ -263,9 +268,9 @@ class FTPAccessor(Accessor):
             port = ftplib.FTP_PORT
             if self.url_parts.port:
                 port = self.url_parts.port
-            self.ftp.connect(self.url_parts.hostname, port)
-            username = self.url_parts.username
-            password = self.url_parts.password
+            self.ftp.connect(cast(str, self.url_parts.hostname), port)
+            username = cast(str, self.url_parts.username)
+            password = cast(str, self.url_parts.password)
             if username:
                 username = urllib.parse.unquote(username)
             if password:
@@ -284,7 +289,7 @@ class FTPAccessor(Accessor):
             return
         self.start_count -= 1
         if self.start_count == 0:
-            self.ftp.quit()
+            cast(ftplib.FTP, self.ftp).quit()
             self.cleanup = False
             self.ftp = None
 
@@ -294,6 +299,7 @@ class FTPAccessor(Accessor):
             self._cleanup()
             url = urllib.parse.unquote(path)
 
+            assert self.ftp
             if self.ftp.size(url) is not None:
                 return True
             lst = self.ftp.nlst(os.path.dirname(url))
@@ -313,6 +319,7 @@ class FTPAccessor(Accessor):
         self._cleanup()
         url = urllib.parse.unquote(address)
 
+        assert self.ftp
         self.ftp.voidcmd('TYPE I')
         socket = self.ftp.transfercmd('RETR ' + url)
         buffered_reader = socket.makefile('rb')
@@ -326,7 +333,7 @@ class FTPAccessor(Accessor):
         fname = urllib.parse.unquote(out_name)
 
         logger.debug("Storing as " + fname)
-        self.ftp.storbinary('STOR ' + fname, in_fh)
+        cast(ftplib.FTP, self.ftp).storbinary('STOR ' + fname, in_fh)
 
     def __repr__(self):
         return "<FTPAccessor: %s>" % self.baseAddress
