@@ -39,9 +39,17 @@ jobs:
         with:
           fetch-depth: 0  # Needed by diff-cover to get the changed lines: origin/master..HEAD
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        # uses: actions/setup-python@v4 due to https://github.com/actions/setup-python/issues/672:
+        # https://github.com/MatteoH2O1999/setup-python
+        # This action tries to build from source all Python versions that actions/setup-python
+        # does not support. It also allows to cache built versions so that after the first run,
+        # installation time is really low. Hope it works also with 20.04, else it needs more changes:
+        uses: MatteoH2O1999/setup-python@v1
         with:
           python-version: ${{ matrix.python-version }}
+          allow-build: info
+          cache-build: true
+          cache: pip
 
       - name: Run of tox on ubuntu-latest
         if: ${{ startsWith(matrix.python-version, '3.') && matrix.python-version != 3.6 }}
