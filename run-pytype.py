@@ -7,7 +7,7 @@ from logging import INFO, basicConfig, info
 from subprocess import DEVNULL, PIPE, Popen
 from typing import List, TextIO
 
-import pandas as pd
+import pandas as pd  # type: ignore[import]
 
 
 def run_pytype(command: List[str], branch_url: str, errorlog: TextIO, results):
@@ -16,9 +16,7 @@ def run_pytype(command: List[str], branch_url: str, errorlog: TextIO, results):
     popen = Popen(command, stdout=PIPE, stderr=DEVNULL, universal_newlines=True)
     error = ""
     row = {}  # type: dict[str, str]
-    while True:
-        if not popen.stdout:
-            break
+    while popen.stdout:
         line = popen.stdout.readline()
         if line == "" and popen.poll() is not None:
             break
@@ -34,7 +32,8 @@ def run_pytype(command: List[str], branch_url: str, errorlog: TextIO, results):
                 printfrom = line.index("]") + 2
             info("PROGRESS: " + line[1:].split("]")[0] + ": " + line[printfrom:])
             continue
-        elif line.startswith("ninja: "):
+
+        if line.startswith("ninja: "):
             line = line[7:]
         if (
             line.startswith("Entering")
@@ -107,17 +106,10 @@ def main(me: str, branch_url: str):
         output_file (str): output file path for the markdown summary table
         branch_url (str): _url of the branch for file links in the summary table
     """
-    never = (
-        "xcp/repository.py",
-        "tests/test_ifrename_logic.py",
-        "tests/test_xmlunwrap.py",
-    )
-    excludes = [
-        "xcp/cmd.py",
-        "xcp/net/ip.py",
-    ]
-    errors_in = excludes.copy()
-    errors_in.extend(never)
+    broken_files = []  # type: list[str]
+    xfail_files = []  # type: list[str]
+    errors_in = xfail_files.copy()
+    errors_in.extend(broken_files)
     base = [
         "pytype",
         "-k",
@@ -125,16 +117,17 @@ def main(me: str, branch_url: str):
         ".github/workflows/pytype.cfg",
     ]
     command = base.copy()
-    command.extend(["--exclude", " ".join(errors_in)])
+    if errors_in:
+        command.extend(["--exclude", " ".join(errors_in)])
 
     def call_pytype(outfp):
         exit_code, results = run_pytype(command, branch_url, sys.stderr, [])
-        for exclude in excludes:
+        for xfail_file in xfail_files:
             command2 = base.copy()
-            command2.append(exclude)
+            command2.append(xfail_file)
             err_code, results = run_pytype(command2, branch_url, outfp, results)
             if err_code == 0:
-                print("No errors in", exclude)
+                print("No errors in", xfail_file)
         return exit_code, results
 
     exit_code, results = call_pytype(sys.stdout)
@@ -157,9 +150,6 @@ if __name__ == "__main__":
     repository = os.environ.get("GITHUB_REPOSITORY", None)
     if server_url and repository:
         # https://github.com/orgs/community/discussions/5251 only set on Pull requests:
-        branch = os.environ.get("GITHUB_HEAD_REF", None)
-        if not branch:
-            # Always set but set to num/merge on PR, but to branch on pushes:
-            branch = os.environ.get("GITHUB_REF_NAME", None)
+        branch = os.environ.get("GITHUB_HEAD_REF", None) or os.environ.get("GITHUB_REF_NAME", None)
         filelink_baseurl = f"{server_url}/{repository}/blob/{branch}"
     main(scriptname, filelink_baseurl)
