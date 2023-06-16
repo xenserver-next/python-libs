@@ -68,7 +68,17 @@ jobs:
 
       - name: Generate combined test-coverage with Python 2.7 and 3.8 for Upload
         if: ${{ matrix.python-version == 2.7 }}
-        run: tox --workdir .github/workflows/.tox --recreate -e py38-covcombine
+        run: |
+          # Dependencies for static analyis with import checks in  pyright-action below
+          tox --workdir .github/workflows/.tox --recreate -e py38-covcombine
+          python3.8 -m pip install mock pyfakefs pytest_httpserver pytest_subprocess
+
+      - name: Generate GitHub Annotations for pyright static analysis warnings
+        uses: jakebailey/pyright-action@v1
+        if: ${{ matrix.python-version == 2.7 }}
+        with:
+          python-platform: Linux
+          python-version: 3.6
 
       - name: Upload coverage reports to Codecov
         if: ${{ matrix.python-version == 2.7 }}
