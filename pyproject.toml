@@ -45,6 +45,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+    "freezegun",
     "mock",
     "pyfakefs",
     "pytest<7",
