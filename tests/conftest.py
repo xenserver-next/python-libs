@@ -4,10 +4,15 @@ Pytest auto configuration.
 
 This module is run automatically by pytest to define and enable fixtures.
 """
+import os
+import warnings
 
 # pyre-ignore-all-errors[21]
 import pytest  # pyre does not find the module when run by tox -e py311-pyre
-import warnings
+
+# Silence warnings from numexpr limiting threads due to too many CPUs
+os.environ['NUMEXPR_MAX_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
 @pytest.fixture(autouse=True)
 def set_warnings():
