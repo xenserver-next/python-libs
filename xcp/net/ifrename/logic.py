@@ -400,6 +400,7 @@ def rename( static_rules,
                 raise StaticRuleError("Expected static rule kname to be None")
 
             # Verify tname points to 'eth<foo>'
+            assert e.tname
             if not e.tname.startswith("eth"):
                 raise StaticRuleError("Static rule '%s' expected to name to "
                                       "'eth<num>'" % (e, ))
@@ -431,6 +432,7 @@ def rename( static_rules,
                                         " None")
 
             # Verify kname is 'eth<foo>' or 'side-<num>-eth<num>'
+            assert e.kname
             if VALID_CUR_STATE_KNAME.match(e.kname) is None:
                 raise StaticRuleError("Current state '%s' expected to name to "
                                       "'eth<num>' or 'side-<num>-eth<num>'"
@@ -460,7 +462,8 @@ def rename( static_rules,
             if e.kname is not None:
                 raise LastStateError("Expected last state kname to be None")
 
-            # Verify kname is valid
+            # Verify tname is valid
+            assert e.tname
             if VALID_ETH_NAME.match(e.tname) is None:
                 raise LastStateError("Last state '%s' target name is invalid"
                                      % (e, ))
@@ -490,6 +493,7 @@ def rename( static_rules,
                 raise OldStateError("Expected old state kname to be None")
 
             # Verify tname points to 'eth<foo>'
+            assert e.tname
             if not e.tname.startswith("eth"):
                 raise OldStateError("Old state '%s' expected tname to "
                                       "'eth<num>'" % (e, ))
